@@ -1,4 +1,51 @@
 window.isSuccess = false; // 是否成功
+window.keepAliveIntervalId = null; // 保活定时器ID
+
+// 启动保活点击（每30秒模拟点击一次，防止验证码弹出）
+function startKeepAlive() {
+    if (window.keepAliveIntervalId) {
+        return; // 已经在运行
+    }
+    
+    window.keepAliveIntervalId = setInterval(() => {
+        if (window.isSuccess) {
+            stopKeepAlive();
+            return;
+        }
+        
+        try {
+            // 模拟点击，优先点击 iframe 内的安全区域
+            let frame = theFrame();
+            if (frame && frame.document && frame.document.body) {
+                // 创建并触发一个 mousemove 和 click 事件来保持活跃
+                let event = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: frame,
+                    clientX: 10,
+                    clientY: 10
+                });
+                // 点击 body 的边缘位置，避免干扰其他元素
+                frame.document.body.dispatchEvent(event);
+                console.log("[Melon Bot] 保活点击已执行 -", new Date().toLocaleTimeString());
+            }
+        } catch (e) {
+            console.log("[Melon Bot] 保活点击失败:", e);
+        }
+    }, 30000); // 30秒
+    
+    console.log("[Melon Bot] 保活定时器已启动（每30秒点击一次）");
+}
+
+// 停止保活点击
+function stopKeepAlive() {
+    if (window.keepAliveIntervalId) {
+        clearInterval(window.keepAliveIntervalId);
+        window.keepAliveIntervalId = null;
+        console.log("[Melon Bot] 保活定时器已停止");
+    }
+}
+
 function playSuccessSound() {
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -165,6 +212,10 @@ async function findSeat() {
         if (fillColor !== "#DDDDDD" && fillColor !== "none") {
             console.log("Rect with different fill color found:", seat[i]);
 
+            // 标记成功并停止保活定时器
+            window.isSuccess = true;
+            stopKeepAlive();
+
             // --- 在这里播放提示音 ---
             playSuccessSound(); 
             // ---------------------
@@ -227,11 +278,18 @@ async function waitFirstLoad() {
     if (!data) {
         return;
     }
+    
+    // 启动保活定时器，防止验证码弹出
+    startKeepAlive();
+    
     await sleep(5000);
     await waitForVerifyCaptchaClose();
     openRangeList();
     await sleep(1000);
     await searchSeat(data);
+    
+    // 抢票成功，确保停止保活定时器
+    stopKeepAlive();
     sendFeiShuMsg(feishuBotId, `[${new Date().toLocaleString()}]抢票成功`);
 }
 
